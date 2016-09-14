@@ -1,0 +1,31 @@
+defunct进程的产生
+结束的子进程在未忽略或者处理SIGCLD信号的父进程调用wait或者waitpid函数之前就已经变成defunct进程(请看example_1,运行ps -au可以查看到有
+24089 pts/26   Z+     0:00 [test] <defunct>).
+为了避免defunct进程的产生,推荐一下几种方式
+1 父进程忽略SIGCHLD信号
+调用fork()函数之前调用signal(SIGCHLD, SIG_IGN)以表示自己不关心子进程什么时候结束,这样子进程在结束时,会由kernel负责回收处理这个子进程
+请参考example_2
+
+2 父进程处理SIGCHLD信号,在这个信号处理函数中添加类似下面的代码
+while (wait(NULL) != -1) {
+	continue;
+}
+if (errno != ECHILD)
+	printf("wait function error:%d\n", errno);
+或者
+while (waitpid(-1, NULL, WNOHANG) > 0) {
+	continue;
+}
+请参考example_3
+实际上这种方式也存在逻辑上的问题的,比如这个例子中,进程处于睡眠状态,但是由于子进程的结束导致了父进程的睡眠提前被唤醒,这导致了逻辑错误的产生(没有等待想要等待的事件的到来),所以应该想更好的办法来避免这个问题.
+注意:
+在父进程后面添加wait或者waitpid的函数的方法是不推荐的,如下面代码,因为父进程在调用wait或者waitpid之前可能子进程已经编程了defunct进程,并且如果父进程一直睡眠并执行不到wait或者waitpid函数,那么这个僵尸进程就一直存在了.
+while (wait(NULL) != -1) {
+	continue;
+}
+if (errno != ECHILD)
+	printf("wait function error:%d\n", errno);
+或者
+while (waitpid(-1, NULL, WNOHANG) > 0) {
+	continue;
+}
